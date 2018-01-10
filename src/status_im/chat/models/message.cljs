@@ -30,10 +30,10 @@
     (:ref (get available-commands-responses response-name))))
 
 (defn- add-message-to-db
-  [db {:keys [message-id] :as message} chat-id]
-  (-> db
-      (update-in [:chats chat-id :unviewed-messages] (fnil conj #{}) message-id)
-      (chat-utils/add-message-to-db chat-id chat-id message (:new? message))))
+  [{:keys [current-chat-id] :as db} {:keys [message-id] :as message} chat-id]
+  (cond-> (chat-utils/add-message-to-db db chat-id chat-id message (:new? message))
+    (not= current-chat-id chat-id)
+    (update-in [:chats chat-id :unviewed-messages (fnil conj #{}) message-id])))
 
 (defn receive
   [{:keys [db message-exists? pop-up-chat? get-last-clock-value now] :as cofx}
