@@ -102,24 +102,33 @@
                     (aset object "content" (pr-str new-content)))))))
 
 (defn update-message-statuses [new-realm]
-  (some-> new-realm
-          (.objects "message")
-          (.map (fn [msg _ _]
-                  (let [message-id (aget msg "message-id")
-                        chat-id    (aget msg "chat-id")
-                        from       (aget msg "from")
-                        msg-status (aget msg "message-status")
-                        statuses   (aget msg "user-statuses")]
-                    (when statuses 
-                      (.map statuses (fn [status _ _]
-                                       (aset status "status-id" (str message-id "-" from))
-                                       (aset status "message-id" message-id)
-                                       (aset status "chat-id"    chat-id)))
-                      (.push statuses (clj->js {"status-id"        (str message-id "-anonymous")
-                                                "message-id"       message-id
-                                                "chat-id"          chat-id
-                                                "status"           (or msg-status "received")
-                                                "whisper-identity" (or from "anonymous")}))))))))
+  (let [status-ids (atom #{})]
+    (some-> new-realm
+            (.objects "message")
+            (.map (fn [msg _ _]
+                    (let [message-id (aget msg "message-id")
+                          chat-id    (aget msg "chat-id")
+                          from       (aget msg "from")
+                          msg-status (aget msg "message-status")
+                          statuses   (aget msg "user-statuses")]
+                      (when statuses 
+                        (.map statuses (fn [status _ _]
+                                         (let [status-id (str message-id "-" from)]
+                                           (if (@status-ids status-id)
+                                             (.delete new-realm status)
+                                             (do
+                                               (swap! status-ids conj status-id)
+                                               (aset status "status-id"  status-id)
+                                               (aset status "message-id" message-id)
+                                               (aset status "chat-id"    chat-id))))))
+                        (let [sender        (or from "anonymous")
+                              sender-status (str message-id "-" sender)]
+                          (when-not (@status-ids sender-status)
+                            (.push statuses (clj->js {"status-id"        sender-status
+                                                      "message-id"       message-id
+                                                      "chat-id"          chat-id
+                                                      "status"           (or msg-status "received")
+                                                      "whisper-identity" sender})))))))))))
 
 (defn migration [old-realm new-realm]
   (log/debug "migrating v19 account database: " old-realm new-realm)
