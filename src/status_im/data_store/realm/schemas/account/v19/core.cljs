@@ -111,7 +111,7 @@
                           from       (aget msg "from")
                           msg-status (aget msg "message-status")
                           statuses   (aget msg "user-statuses")]
-                      (when statuses 
+                      (when statuses
                         (.map statuses (fn [status _ _]
                                          (let [status-id (str message-id "-" from)]
                                            (if (@status-ids status-id)
@@ -130,6 +130,19 @@
                                                       "status"           (or msg-status "received")
                                                       "whisper-identity" sender})))))))))))
 
+(defn message-exists? [new-realm message-id]
+  (some-> new-realm
+          (.objects "message")
+          (.filtered (str "message-id = \"" message-id "\""))
+          (aget 0)))
+
+(defn delete-orphaned-statuses [new-realm]
+  (some-> new-realm
+          (.objects "user-status")
+          (.map (fn [status _ _]
+                  (when-not (message-exists? new-realm (aget status "message-id")) 
+                    (.delete new-realm status))))))
+
 (defn migration [old-realm new-realm]
   (log/debug "migrating v19 account database: " old-realm new-realm)
   (remove-contact! new-realm "transactor-personal")
@@ -138,4 +151,5 @@
   (update-commands (juxt :bot :command) owner-command->new-props new-realm "command")
   (update-commands (juxt :command) console-requests->new-props new-realm "command-request")
   (update-commands (juxt :command (comp count :prefill)) transactor-requests->new-props new-realm "command-request")
-  (update-message-statuses new-realm))
+  (update-message-statuses new-realm)
+  (delete-orphaned-statuses new-realm))
