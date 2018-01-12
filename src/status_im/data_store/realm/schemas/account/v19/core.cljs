@@ -122,12 +122,15 @@
                                                (aset status "message-id" message-id)
                                                (aset status "chat-id"    chat-id))))))
                         (let [sender        (or from "anonymous")
-                              sender-status (str message-id "-" sender)]
+                              sender-status (str message-id "-" sender)
+                              new-status    (or msg-status (if (= "console" chat-id)
+                                                             "seen"
+                                                             "received"))]
                           (when-not (@status-ids sender-status)
                             (.push statuses (clj->js {"status-id"        sender-status
                                                       "message-id"       message-id
                                                       "chat-id"          chat-id
-                                                      "status"           (or msg-status "received")
+                                                      "status"           new-status
                                                       "whisper-identity" sender})))))))))))
 
 (defn message-exists? [new-realm message-id]
@@ -140,7 +143,7 @@
   (some-> new-realm
           (.objects "user-status")
           (.map (fn [status _ _]
-                  (when-not (message-exists? new-realm (aget status "message-id")) 
+                  (when-not (message-exists? new-realm (aget status "message-id"))
                     (.delete new-realm status))))))
 
 (defn migration [old-realm new-realm]
